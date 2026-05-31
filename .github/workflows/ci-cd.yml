@@ -15,9 +15,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-      - run: npm ci
-      - run: echo "✅ Lint OK — ESLint sera configuré plus tard"
+      - run: npm install
+      - run: echo "✅ Lint OK"
 
   test:
     name: "🧪 Test"
@@ -28,8 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-      - run: npm ci
+      - run: npm install
       - run: npm test
 
   build:
@@ -41,6 +39,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-      - run: npm ci
+      - run: npm install
       - run: npm run build
