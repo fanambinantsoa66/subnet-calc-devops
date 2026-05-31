@@ -1,0 +1,97 @@
+# ─── Prometheus Alert Rules ───────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: subnet-calc-alerts
+  namespace: production
+  labels:
+    app: subnet-calc
+spec:
+  groups:
+    - name: subnet-calc.availability
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            rate(nginx_http_requests_total{status=~"5.."}[5m])
+            / rate(nginx_http_requests_total[5m]) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High 5xx error rate on subnet-calc"
+            description: "Error rate exceeded 5% for 2 minutes"
+
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{namespace="production", pod=~"subnet-calc-.*"} == 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} not ready"
+
+        - alert: HighMemoryUsage
+          expr: |
+            container_memory_usage_bytes{namespace="production", container="app"}
+            / container_spec_memory_limit_bytes > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Memory > 85% on {{ $labels.pod }}"
+
+        - alert: ReplicasMissing
+          expr: |
+            kube_deployment_status_replicas_available{namespace="production", deployment="subnet-calc"} < 2
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Less than 2 replicas available — SLA at risk"
+---
+# ─── Grafana Dashboard ConfigMap ──────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: subnet-calc-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  subnet-calc.json: |
+    {
+      "title": "Subnet Calculator — App Metrics",
+      "uid": "subnet-calc",
+      "panels": [
+        {
+          "title": "HTTP Requests/sec",
+          "type": "graph",
+          "targets": [{ "expr": "rate(nginx_http_requests_total[1m])" }]
+        },
+        {
+          "title": "5xx Error Rate",
+          "type": "singlestat",
+          "targets": [{ "expr": "rate(nginx_http_requests_total{status=~'5..'}[5m]) / rate(nginx_http_requests_total[5m])" }]
+        },
+        {
+          "title": "Pod Memory Usage",
+          "type": "graph",
+          "targets": [{ "expr": "container_memory_usage_bytes{namespace='production', container='app'}" }]
+        },
+        {
+          "title": "Pod CPU Usage",
+          "type": "graph",
+          "targets": [{ "expr": "rate(container_cpu_usage_seconds_total{namespace='production', container='app'}[1m])" }]
+        },
+        {
+          "title": "Response Time p95",
+          "type": "singlestat",
+          "targets": [{ "expr": "histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m]))" }]
+        },
+        {
+          "title": "Available Replicas",
+          "type": "singlestat",
+          "targets": [{ "expr": "kube_deployment_status_replicas_available{deployment='subnet-calc'}" }]
+        }
+      ]
+    }
